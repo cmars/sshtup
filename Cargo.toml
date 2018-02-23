@@ -1,0 +1,8 @@
+[package]
+name = "sshtup"
+version = "0.1.0"
+authors = ["Casey Marshall <me@cmars.tech>"]
+
+[dependencies]
+rustupolis = { path = "vendor/rustupolis" }
+
