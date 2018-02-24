@@ -1,0 +1,70 @@
+use rustupolis::tuple::{E, Tuple};
+
+use ast::Statement;
+
+#[pub]
+statement -> Statement
+	= __ in_keyword __ t:tuple __ { Statement::In(t) }
+	/ __ rd_keyword __ t:tuple __ { Statement::Rd(t) }
+	/ __ out_keyword __ t:tuple __ { Statement::Out(t) }
+
+in_keyword = "in"
+rd_keyword = "rd"
+out_keyword = "out"
+
+tuple -> Tuple
+	= "[" __ e:elements __ "]" { Tuple::new(&e) }
+	/ "[" __ "]" { Tuple::new(&[]) }
+
+elements -> Vec<E>
+	= e:element __ "," __ es:elements { let mut es = es; es.insert(0, e); es }
+	/ e:element { vec![e] }
+
+element -> E
+	= "_" { E::Any }
+	/ t:tuple { E::T(t) }
+	/ f:float_value { E::D(f) }
+	/ i:int_value { E::I(i) }
+	/ s:str_value { E::S(s) }
+
+float_value -> f64
+	= f:$([0-9]+[.]([0-9]+)) { f.parse::<f64>().unwrap() }
+	/ f:$(([0-9]+)?[.][0-9]+) { f.parse::<f64>().unwrap() }
+	/ f:$([0-9]+[eE][0-9]+) { f.parse::<f64>().unwrap() }
+
+int_value -> i32
+	= i:$([0-9]+) { i.parse::<i32>().unwrap() }
+
+str_value -> String
+    = v:$([A-Za-z0-9_]+) { String::from(v) }
+    / "\"" v:$([^"]+) "\"" { String::from(v) }
+
+/* The following is borrowed from rust-peg's own grammar */
+
+__ = (whitespace / eol / comment)*
+
+/* Modeled after ECMA-262, 5th ed., 7.4. */
+comment
+  = singleLineComment
+  / multiLineComment
+
+singleLineComment
+  = "//" (!eolChar .)*
+
+multiLineComment
+  = "/*" (!"*/" .)* "*/"
+
+/* Modeled after ECMA-262, 5th ed., 7.3. */
+eol
+  = "\n"
+  / "\r\n"
+  / "\r"
+  / "\u{2028}"
+  / "\u{2029}"
+
+eolChar
+  = [\n\r\u{2028}\u{2029}]
+
+/* Modeled after ECMA-262, 5th ed., 7.2. */
+whitespace
+  = [ \t\u{00A0}\u{FEFF}\u{1680}\u{180E}\u{2000}-\u{200A}\u{202F}\u{205F}\u{3000}] // \v\f removed

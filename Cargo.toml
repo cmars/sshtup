@@ -2,7 +2,14 @@
 name = "sshtup"
 version = "0.1.0"
 authors = ["Casey Marshall <me@cmars.tech>"]
+build = "build.rs"
+
+[build-dependencies]
+peg = { version = "0.5.4" }
 
 [dependencies]
 rustupolis = { path = "vendor/rustupolis" }
 
+[[test]]
+name = "grammar"
+path = "tests/grammar.rs"
