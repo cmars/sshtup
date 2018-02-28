@@ -8,8 +8,20 @@ build = "build.rs"
 peg = { version = "0.5.4" }
 
 [dependencies]
+env_logger = "0.4"
+error-chain = "0.11"
+futures = "0.1"
+log = "0.3"
+# ring = "0.12"
 rustupolis = { path = "vendor/rustupolis" }
+thrussh = "0.19.2"
+thrussh-keys = "0.9.4"
+tokio-core = "0.1"
 
 [[test]]
 name = "grammar"
 path = "tests/grammar.rs"
+
+[[bin]]
+name = "sshtupd"
+path = "cmd/sshtupd.rs"
