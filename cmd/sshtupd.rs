@@ -1,9 +1,10 @@
+use std::sync::Arc;
+
 extern crate env_logger;
-extern crate sshtup;
 extern crate thrussh;
 extern crate thrussh_keys;
 
-use std::sync::Arc;
+extern crate sshtup;
 use sshtup::server::H;
 
 fn main() {
