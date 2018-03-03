@@ -52,18 +52,30 @@ impl H {
         }
     }
     fn with_op(mut self, op: SpaceOp) -> Self {
-        debug!("with_op: {:?}", op);
+        trace!("with_op: {:?}", op);
         self.op = Some(op);
         self
     }
-    fn readline(&mut self) -> Result<Option<Statement>> {
-        if self.current_line.is_empty() {
-            return Ok(None);
-        }
-        let raw_line = self.current_line.drain(..).collect::<Vec<u8>>();
+    fn parse_stmt(&self, raw_line: &[u8]) -> Result<Statement> {
         let line = std::str::from_utf8(&raw_line).chain_err(|| "invalid utf8")?;
         let stmt = grammar::statement(line).chain_err(|| "parse error")?;
-        Ok(Some(stmt))
+        Ok(stmt)
+    }
+    fn begin_stmt(&self, stmt: Statement) -> SpaceOp {
+        match stmt {
+            Statement::In(tup) => {
+                let mut space = self.space.lock().unwrap();
+                SpaceOp::Query(space.in_(tup))
+            }
+            Statement::Rd(tup) => {
+                let mut space = self.space.lock().unwrap();
+                SpaceOp::Query(space.rd(tup))
+            }
+            Statement::Out(tup) => {
+                let mut space = self.space.lock().unwrap();
+                SpaceOp::Out(space.out(tup))
+            }
+        }
     }
     fn write_tup(session: &mut Session, channel: ChannelId, tup: Tuple) {
         let msg = format!("{:?}", tup);
@@ -135,7 +147,7 @@ impl Future for HFuture {
                 match f.poll() {
                     Ok(Async::Ready(())) => H::write_string(&mut session, channel, "ok"),
                     Ok(Async::NotReady) => {
-                        return Ok(Async::Ready((h.with_op(SpaceOp::Out(f)), session)))
+                        return Ok(Async::Ready((h.with_op(SpaceOp::Out(f)), session)));
                     }
                     Err(e) => H::write_error(&mut session, channel, e),
                 }
@@ -184,6 +196,27 @@ impl server::Handler for H {
         H::write_prompt(&mut session, channel);
         self.finished(session)
     }
+    fn exec_request(
+        mut self,
+        channel: ChannelId,
+        data: &[u8],
+        mut session: Session,
+    ) -> Self::FutureUnit {
+        // Block on current space operation (however unlikely here... hmm)
+        if let Some(op) = self.op.take() {
+            return HFuture::new(self, Some(op), session, Some(channel));
+        }
+        let new_op = match self.parse_stmt(data) {
+            Ok(stmt) => self.begin_stmt(stmt),
+            Err(e) => {
+                let msg = format!("{}", e.display_chain());
+                H::write_string(&mut session, channel, &msg);
+                H::write_prompt(&mut session, channel);
+                return self.finished(session);
+            }
+        };
+        HFuture::new(self, Some(new_op), session, Some(channel))
+    }
     fn data(
         mut self,
         channel: ChannelId,
@@ -194,7 +227,7 @@ impl server::Handler for H {
         if let Some(op) = self.op.take() {
             return HFuture::new(self, Some(op), session, Some(channel));
         }
-        debug!("data: {:?}", data);
+        trace!("data: {:?}", data);
         match data {
             b"\x04" => {
                 session.eof(channel);
@@ -204,23 +237,13 @@ impl server::Handler for H {
             b"\r" => {
                 // line break
                 session.data(channel, None, b"\r\n");
-                let new_op = match self.readline() {
-                    Ok(Some(Statement::In(tup))) => {
-                        let mut space = self.space.lock().unwrap();
-                        SpaceOp::Query(space.in_(tup))
-                    }
-                    Ok(Some(Statement::Rd(tup))) => {
-                        let mut space = self.space.lock().unwrap();
-                        SpaceOp::Query(space.rd(tup))
-                    }
-                    Ok(Some(Statement::Out(tup))) => {
-                        let mut space = self.space.lock().unwrap();
-                        SpaceOp::Out(space.out(tup))
-                    }
-                    Ok(None) => {
-                        H::write_prompt(&mut session, channel);
-                        return self.finished(session);
-                    }
+                if self.current_line.is_empty() {
+                    H::write_prompt(&mut session, channel);
+                    return self.finished(session);
+                }
+                let raw_line = self.current_line.drain(..).collect::<Vec<u8>>();
+                let new_op = match self.parse_stmt(&raw_line) {
+                    Ok(stmt) => self.begin_stmt(stmt),
                     Err(e) => {
                         let msg = format!("{}", e.display_chain());
                         H::write_string(&mut session, channel, &msg);
