@@ -1,7 +1,7 @@
 # sshtup - tuplespace server
 
 sshtup is a tuplespace server that provides a shell interpreter interface for
-the [Linda coordination language](https://en.wikipedia.org/wiki/Linda_(coordination_language).
+the [Linda coordination language](https://en.wikipedia.org/wiki/Linda_(coordination_language)).
 Normal SSH clients may connect to a sshtup server (`sshtupd`) to exchange data
 and coordinate distributed operations in tuplespace.
 
