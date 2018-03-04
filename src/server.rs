@@ -115,8 +115,18 @@ impl Future for HFuture {
     type Item = (H, thrussh::server::Session);
     type Error = ();
     fn poll(&mut self) -> Poll<(H, thrussh::server::Session), ()> {
-        let h = self.h.take().unwrap();
-        let mut session = self.session.take().unwrap();
+        let h = if let Some(h) = self.h.take() {
+            h
+        } else {
+            error!("handler is None");
+            return Err(());
+        };
+        let mut session = if let Some(session) = self.session.take() {
+            session
+        } else {
+            error!("session is None");
+            return Err(());
+        };
         match self.op.take() {
             Some(SpaceOp::Query(mut f)) => {
                 let channel = match self.channel.take() {
@@ -130,7 +140,13 @@ impl Future for HFuture {
                     Ok(Async::Ready(Some(tup))) => H::write_tup(&mut session, channel, tup),
                     Ok(Async::Ready(None)) => H::write_string(&mut session, channel, "none"),
                     Ok(Async::NotReady) => {
-                        return Ok(Async::Ready((h.with_op(SpaceOp::Query(f)), session)));
+                        *self = HFuture {
+                            h: Some(h),
+                            session: Some(session),
+                            op: Some(SpaceOp::Query(f)),
+                            channel: Some(channel),
+                        };
+                        return Ok(Async::NotReady);
                     }
                     Err(e) => H::write_error(&mut session, channel, e),
                 }
@@ -147,7 +163,13 @@ impl Future for HFuture {
                 match f.poll() {
                     Ok(Async::Ready(())) => H::write_string(&mut session, channel, "ok"),
                     Ok(Async::NotReady) => {
-                        return Ok(Async::Ready((h.with_op(SpaceOp::Out(f)), session)));
+                        *self = HFuture {
+                            h: Some(h),
+                            session: Some(session),
+                            op: Some(SpaceOp::Out(f)),
+                            channel: Some(channel),
+                        };
+                        return Ok(Async::NotReady);
                     }
                     Err(e) => H::write_error(&mut session, channel, e),
                 }

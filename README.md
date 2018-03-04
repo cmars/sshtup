@@ -33,11 +33,6 @@ Tuple([1,2,3])
 
 # TODO
 
-A blocking Linda operation (`in`, `rd`) will unblock when a matching tuple is
-written with `out` elsewhere. However, the thrussh server reactor doesn't
-immediately pick up on this to display the result. In the example above, I kind
-of cheated, Alice has to press enter to 'wake up' the tokio reactor.
-
 sshtup currently stores tuples in memory. Durable, scalable storage would be nice.
 
 All kinds of mundane things like identities, acls, permissions, timeouts,
